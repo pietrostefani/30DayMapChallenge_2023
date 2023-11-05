@@ -1,0 +1,95 @@
+---
+title: "asia_density"
+author: "Elisabetta Pietrostefani"
+date: "2023-11-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(sf)
+library(tidyverse)
+library(R.utils)
+library(dplyr)
+library(sf)
+library(ggplot2)
+library(tmap)
+library(viridis)
+library(RColorBrewer)
+library(raster)
+library(terra)
+library(tidyr)
+library(exactextractr)
+library(tidyterra)
+library(readxl)
+```
+
+```{r}
+asia_shp <- st_read("data/World_Countries_Generalized/asia_bis.shp")
+
+pop2010raster <- rast("data/gpw_v4_population_count_rev11_2010_2pt5_min.tif")
+pop2020raster <- rast("data/gpw_v4_population_count_rev11_2020_2pt5_min.tif")
+
+crs(pop2010raster)
+crs(pop2020raster)
+
+population2010 <- terra::project(pop2010raster, crs(asia_shp)) 
+population2020 <- terra::project(pop2020raster, crs(asia_shp)) 
+
+crs(population2010)
+crs(population2020)
+
+population_china_2010 <- crop(population2010, extent(asia_shp))
+population_china_2020 <- crop(population2020, extent(asia_shp))
+
+population_china_2010_mask <- mask(population_china_2010, asia_shp)
+population_china_2020_mask <- mask(population_china_2020, asia_shp)
+
+china_pop_diff_2010_2020 <- overlay(raster(population_china_2010_mask), raster(population_china_2020_mask), fun=function(x,y)y-x)
+
+crs(china_pop_diff_2010_2020)
+
+# Summary of the result
+summary(china_pop_diff_2010_2020)
+
+```
+
+```{r}
+# Define your reclassification breaks
+pop_breaks <- matrix(c(-Inf, 0, 1, 0, 2.543, 2, 2.543, 47.6165, 3, 47.6165, Inf, 4), ncol = 3, byrow = TRUE)
+
+# Reclassify the overlay_raster using the defined breaks
+reclassified_rast <- reclassify(china_pop_diff_2010_2020, pop_breaks)
+
+reclassified_rast
+```
+
+```{r}
+
+
+tmap_mode("view")
+  tm_shape(reclassified_rast, raster.downsample = FALSE) +
+  tm_raster(
+    title = "Population Change from 2010 to 2020",
+    palette = c("#44437b", "#e5e8e9", "#59ad82", "#b8d858"),
+    # palette = c("#FF6347", "#e5e8e9", "#008000", "#32CD32"),
+    breaks = c(1,2,3,4,5),
+    labels = c("Decline","Neutral","Growth","High Growth")
+    ) +
+  tm_shape(asia_shp) +
+  #tm_text(text = "COUNTRY",  # Replace with the actual column name containing the IDs
+  #  size = 0.8,              # Adjust the text size as needed
+  #  col = "black") +
+  tm_fill(col = NA, alpha = 0,  id="COUNTRY") +
+  tm_borders() +
+  tm_layout(
+    main.title = "Population Change in Asia from (2010 - 2020)", legend.outside = TRUE, legend.outside.position = "bottom",
+  )
+
+```
+
+
+
